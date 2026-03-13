@@ -144,7 +144,7 @@ document.getElementById("modal").style.display="none";
 }
 
 
-window.reservar = function(){
+window.reservar = async function(){
 
 const nombre = document.getElementById("nombre").value.trim();
 
@@ -153,13 +153,19 @@ alert("Escribe tu nombre");
 return;
 }
 
+if(!numeroActual){
+alert("Error al seleccionar número");
+return;
+}
+
 if(numeroActual.nombre){
 alert("Este número ya fue reservado");
 return;
 }
 
-/* actualizamos objeto completo */
-set(
+try{
+
+await set(
 ref(db,"rifa/"+numeroActual.firebaseId),
 {
 numero: numeroActual.numero,
@@ -185,11 +191,19 @@ ${nombre}
 
 Favor de confirmar el pago para validar la participación.`;
 
-const url="https://api.whatsapp.com/send?phone="
+const url =
+"https://api.whatsapp.com/send?phone="
 +telefono+
 "&text="+encodeURIComponent(mensaje);
 
 window.open(url,"_blank");
+
+}catch(error){
+
+console.error("Error guardando en Firebase:", error);
+alert("Error al guardar la reserva");
+
+}
 
 }
 
