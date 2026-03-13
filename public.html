@@ -143,39 +143,37 @@ document.getElementById("modal").style.display="none";
 }
 
 
-window.reservar=function(){
+window.reservar = function(){
 
-const nombre=document.getElementById("nombre").value;
+const nombre = document.getElementById("nombre").value.trim();
 
 if(!nombre){
-
 alert("Escribe tu nombre");
 return;
-
 }
 
 if(numeroActual.nombre){
-
 alert("Este número ya fue reservado");
 return;
-
 }
 
-update(ref(db,"rifa/"+numeroActual.firebaseId),{
-
-nombre:nombre,
-pagado:false
-
-});
+/* actualizamos objeto completo */
+set(
+ref(db,"rifa/"+numeroActual.firebaseId),
+{
+numero: numeroActual.numero,
+nombre: nombre,
+pagado: false
+}
+);
 
 cerrarModal();
 
 alert("Número reservado. Ahora envía el WhatsApp para confirmar.");
 
-
 const telefono="5212291325534";
 
-const mensaje=
+const mensaje =
 `🎟️ RESERVA DE BOLETO
 
 Número:
