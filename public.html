@@ -1,91 +1,200 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Elegir Número - Rifa</title>
-  <link rel="stylesheet" href="style.css" />
-  <script type="module" src="firebase-config.js"></script>
+
+<meta charset="UTF-8">
+<title>Selecciona tu número</title>
+
+<link rel="stylesheet" href="style.css">
+
 </head>
+
 <body>
-  <h1>Selecciona tu número</h1>
-  <div class="controls">
-    <button onclick="filtrar('todos')">Todos</button>
-    <button onclick="filtrar('libres')">Disponibles</button>
-    <button onclick="filtrar('ocupados')">Ocupados</button>
-  </div>
-  <table id="tabla">
-    <thead>
-      <tr>
-        <th>Número</th>
-        <th>Nombre</th>
-        <th>Acción</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
 
-  <script type="module">
-    import { db, ref, onValue, set } from './firebase-config.js';
+<h1>Selecciona tu número</h1>
 
-    const dbRef = ref(db, "rifa");
-    let datos = [];
+<div class="stats">
 
-    onValue(dbRef, (snapshot) => {
-      datos = snapshot.val() || [];
-      renderizarTabla(datos);
-    });
+<div id="contador"></div>
 
-    function enmascararNombre(nombre) {
-  return nombre
-    .split(" ")
-    .map(palabra => palabra.length > 0 ? palabra[0] + "*".repeat(palabra.length - 1) : "")
-    .join(" ");
-    }
+<div class="progress">
+<div id="progressBar" class="progress-bar"></div>
+</div>
 
-    function renderizarTabla(lista) {
-      const tbody = document.querySelector("#tabla tbody");
-      tbody.innerHTML = "";
-      lista.forEach((item, idx) => {
-        const fila = document.createElement("tr");
+</div>
 
-        const celdaNum = document.createElement("td");
-        celdaNum.textContent = item.numero;
+<div id="grid" class="grid"></div>
 
-        const celdaNombre = document.createElement("td");
-        const inputNombre = document.createElement("input");
-        inputNombre.type = "text";
-        inputNombre.value = item.nombre !== "" ? enmascararNombre(item.nombre) : "";
-        inputNombre.disabled = item.nombre !== "";
-        celdaNombre.appendChild(inputNombre);
 
-        const celdaAccion = document.createElement("td");
-        const btnGuardar = document.createElement("button");
-        btnGuardar.textContent = "Elegir";
-        btnGuardar.disabled = item.nombre !== "";
-        btnGuardar.onclick = () => {
-          if (inputNombre.value.trim() === "") {
-            alert("Por favor escribe tu nombre.");
-            return;
-          }
-          datos[idx].nombre = inputNombre.value.trim();
-          set(dbRef, datos);
-          alert("¡Número guardado!");
-        };
-        celdaAccion.appendChild(btnGuardar);
+<div id="modal" class="modal">
 
-        fila.appendChild(celdaNum);
-        fila.appendChild(celdaNombre);
-        fila.appendChild(celdaAccion);
-        tbody.appendChild(fila);
-      });
-    }
+<div class="modal-content">
 
-    function filtrar(tipo) {
-      if (tipo === "todos") renderizarTabla(datos);
-      if (tipo === "libres") renderizarTabla(datos.filter(d => d.nombre === ""));
-      if (tipo === "ocupados") renderizarTabla(datos.filter(d => d.nombre !== ""));
-    }
-  </script>
+<h2>Reservar número</h2>
+
+<p id="numeroSeleccionado" class="numero-modal"></p>
+
+<input id="nombre" placeholder="Tu nombre">
+
+<div>
+<button class="btn-primary" onclick="reservar()">Reservar</button>
+<button class="btn-secondary" onclick="cerrarModal()">Cancelar</button>
+</div>
+
+</div>
+
+</div>
+
+
+<script type="module">
+
+import { db } from "./firebase-config.js";
+import { ref,onValue,update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+let datos=[];
+let numeroActual=null;
+
+const grid=document.getElementById("grid");
+
+onValue(ref(db,"rifa"),(snapshot)=>{
+
+const data=snapshot.val();
+datos=[];
+
+data.forEach((item,index)=>{
+
+datos.push({
+firebaseId:index,
+...item
+});
+
+});
+
+renderizar();
+actualizarStats();
+
+});
+
+
+function actualizarStats(){
+
+const total=datos.length;
+
+const vendidos=datos.filter(n=>n.nombre).length;
+
+const porcentaje=Math.round((vendidos/total)*100);
+
+document.getElementById("contador").innerText=
+`${vendidos} / ${total} boletos reservados`;
+
+document.getElementById("progressBar").style.width=
+porcentaje+"%";
+
+}
+
+
+function renderizar(){
+
+grid.innerHTML="";
+
+datos.forEach(n=>{
+
+let estado="libre";
+
+if(n.nombre) estado="ocupado";
+if(n.pagado) estado="pagado";
+
+const card=document.createElement("div");
+
+card.className="numero "+estado;
+
+card.innerHTML=`
+<div class="numero-id">${n.numero}</div>
+<div class="numero-status">${estado.toUpperCase()}</div>
+`;
+
+if(!n.nombre){
+
+card.onclick=()=>abrirModal(n);
+
+}
+
+grid.appendChild(card);
+
+});
+
+}
+
+
+function abrirModal(n){
+
+numeroActual=n;
+
+document.getElementById("modal").style.display="flex";
+document.getElementById("numeroSeleccionado").innerText=n.numero;
+
+}
+
+
+window.cerrarModal=function(){
+
+document.getElementById("modal").style.display="none";
+
+}
+
+
+window.reservar=function(){
+
+const nombre=document.getElementById("nombre").value;
+
+if(!nombre){
+
+alert("Escribe tu nombre");
+return;
+
+}
+
+if(numeroActual.nombre){
+
+alert("Este número ya fue reservado");
+return;
+
+}
+
+update(ref(db,"rifa/"+numeroActual.firebaseId),{
+
+nombre:nombre,
+pagado:false
+
+});
+
+cerrarModal();
+
+alert("Número reservado. Ahora envía el WhatsApp para confirmar.");
+
+
+const telefono="5212291325534";
+
+const mensaje=
+`🎟️ RESERVA DE BOLETO
+
+Número:
+${numeroActual.numero}
+
+Nombre:
+${nombre}
+
+Favor de confirmar el pago para validar la participación.`;
+
+const url="https://api.whatsapp.com/send?phone="
++telefono+
+"&text="+encodeURIComponent(mensaje);
+
+window.open(url,"_blank");
+
+}
+
+</script>
+
 </body>
 </html>

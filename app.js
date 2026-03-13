@@ -1,115 +1,224 @@
-import { jsPDF } from "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+import { db } from "./firebase-config.js";
 
-let datos = [];
+import {
+ref,
+onValue,
+update
+} from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
-function inicializar() {
-  const almacenados = localStorage.getItem("rifa");
-  if (almacenados) {
-    datos = JSON.parse(almacenados);
-  } else {
-    datos = Array.from({ length: 100 }, (_, i) => ({
-      numero: i.toString().padStart(2, "0"),
-      nombre: "",
-      pagado: false,
-    }));
-  }
-  renderizarTabla(datos);
+
+let datos=[];
+
+const tabla=document.getElementById("tabla");
+
+const total=document.getElementById("total");
+const libres=document.getElementById("libres");
+const ocupados=document.getElementById("ocupados");
+const pagados=document.getElementById("pagados");
+
+const buscar=document.getElementById("buscar");
+
+const dbRef=ref(db,"rifa");
+
+
+onValue(dbRef,(snapshot)=>{
+
+const data=snapshot.val();
+
+datos=[];
+
+data.forEach((item,index)=>{
+
+datos.push({
+firebaseId:index,
+...item
+});
+
+});
+
+renderizar(datos);
+actualizarMetricas();
+
+});
+
+
+function renderizar(lista){
+
+tabla.innerHTML="";
+
+lista.forEach(n=>{
+
+const tr=document.createElement("tr");
+
+let estado="libre";
+
+if(n.nombre) estado="ocupado";
+if(n.pagado) estado="pagado";
+
+tr.className=estado;
+
+tr.innerHTML=`
+
+<td>${n.numero}</td>
+
+<td>
+<input
+class="nombreInput"
+data-id="${n.firebaseId}"
+value="${n.nombre || ""}">
+</td>
+
+<td>
+<input
+type="checkbox"
+class="pagadoCheck"
+data-id="${n.firebaseId}"
+${n.pagado ? "checked" : ""}>
+</td>
+
+`;
+
+tabla.appendChild(tr);
+
+});
+
 }
 
-function renderizarTabla(lista) {
-  const tbody = document.querySelector("#tabla tbody");
-  tbody.innerHTML = "";
-  lista.forEach((item, idx) => {
-    const fila = document.createElement("tr");
 
-    const celdaNum = document.createElement("td");
-    celdaNum.textContent = item.numero;
 
-    const celdaNombre = document.createElement("td");
-    const inputNombre = document.createElement("input");
-    inputNombre.type = "text";
-    inputNombre.value = item.nombre;
-    inputNombre.disabled = item.nombre.trim() !== "";
-    inputNombre.oninput = (e) => {
-      datos[idx].nombre = e.target.value;
-    };
-    celdaNombre.appendChild(inputNombre);
+document.addEventListener("blur",(e)=>{
 
-    const celdaPago = document.createElement("td");
-    const checkPago = document.createElement("input");
-    checkPago.type = "checkbox";
-    checkPago.checked = item.pagado;
-    checkPago.onchange = (e) => {
-      datos[idx].pagado = e.target.checked;
-    };
-    celdaPago.appendChild(checkPago);
+if(e.target.classList.contains("nombreInput")){
 
-    const celdaAccion = document.createElement("td");
-    const btnDesbloquear = document.createElement("button");
-    btnDesbloquear.textContent = "Desbloquear";
-    btnDesbloquear.onclick = () => {
-      inputNombre.disabled = false;
-      datos[idx].nombre = "";
-      inputNombre.value = "";
-    };
-    celdaAccion.appendChild(btnDesbloquear);
+update(ref(db,"rifa/"+e.target.dataset.id),{
 
-    fila.appendChild(celdaNum);
-    fila.appendChild(celdaNombre);
-    fila.appendChild(celdaPago);
-    fila.appendChild(celdaAccion);
-    tbody.appendChild(fila);
-  });
+nombre:e.target.value
+
+});
+
 }
 
-function guardarDatos() {
-  localStorage.setItem("rifa", JSON.stringify(datos));
-  alert("Datos guardados.");
+},true);
+
+
+
+document.addEventListener("change",(e)=>{
+
+if(e.target.classList.contains("pagadoCheck")){
+
+update(ref(db,"rifa/"+e.target.dataset.id),{
+
+pagado:e.target.checked
+
+});
+
 }
 
-function filtrar(tipo) {
-  if (tipo === "todos") {
-    renderizarTabla(datos);
-  } else if (tipo === "libres") {
-    renderizarTabla(datos.filter(d => d.nombre.trim() === ""));
-  } else if (tipo === "ocupados") {
-    renderizarTabla(datos.filter(d => d.nombre.trim() !== ""));
-  }
+});
+
+
+
+function actualizarMetricas(){
+
+total.innerText=datos.length;
+
+let l=0;
+let o=0;
+let p=0;
+
+datos.forEach(n=>{
+
+if(!n.nombre) l++;
+if(n.nombre) o++;
+if(n.pagado) p++;
+
+});
+
+libres.innerText=l;
+ocupados.innerText=o;
+pagados.innerText=p;
+
 }
 
-async function generarPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  doc.setFontSize(14);
-  doc.text("Listado de Números de Rifa - Bisutería", 10, 10);
 
-  const headers = [["Número", "Nombre", "Pagado"]];
-  const rows = datos.map(d => [
-    d.numero,
-    d.nombre || "Disponible",
-    d.pagado ? "Sí" : "No"
-  ]);
 
-  doc.autoTable({
-    head: headers,
-    body: rows,
-    startY: 20
-  });
+window.filtrar=function(tipo){
 
-  doc.save("rifa_bisuteria.pdf");
+let filtrados=[...datos];
+
+if(tipo==="libres")
+filtrados=datos.filter(n=>!n.nombre);
+
+if(tipo==="ocupados")
+filtrados=datos.filter(n=>n.nombre);
+
+if(tipo==="pagados")
+filtrados=datos.filter(n=>n.pagado);
+
+renderizar(filtrados);
+
 }
 
-function exportarCSV() {
-  const csv = ["Número,Nombre,Pagado"];
-  datos.forEach(d => {
-    csv.push(`${d.numero},"${d.nombre}",${d.pagado ? "Sí" : "No"}`);
-  });
-  const blob = new Blob([csv.join("\n")], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "rifa_bisuteria.csv";
-  a.click();
+
+
+buscar.addEventListener("input",()=>{
+
+const t=buscar.value.toLowerCase();
+
+const filtrados=datos.filter(n=>
+
+(n.numero+"").includes(t) ||
+(n.nombre||"").toLowerCase().includes(t)
+
+);
+
+renderizar(filtrados);
+
+});
+
+
+
+window.exportarCSV=function(){
+
+let csv="Numero,Nombre,Pagado\n";
+
+datos.forEach(n=>{
+
+csv+=`${n.numero},${n.nombre||""},${n.pagado?"SI":"NO"}\n`;
+
+});
+
+const blob=new Blob([csv]);
+
+const a=document.createElement("a");
+
+a.href=URL.createObjectURL(blob);
+
+a.download="rifa.csv";
+
+a.click();
+
 }
 
-window.onload = inicializar;
+
+
+window.generarPDF=function(){
+
+const { jsPDF } = window.jspdf;
+
+const doc=new jsPDF();
+
+const filas=datos.map(n=>[
+n.numero,
+n.nombre||"",
+n.pagado?"SI":"NO"
+]);
+
+doc.autoTable({
+head:[["Numero","Nombre","Pagado"]],
+body:filas
+});
+
+doc.save("rifa.pdf");
+
+}
